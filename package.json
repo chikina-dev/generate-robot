@@ -1,28 +1,39 @@
 {
   "name": "generate-robot",
   "version": "1.0.0",
-  "description": "",
-  "main": "main.ts",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Workers上で動く鬼畜ロボットDiscord Bot",
   "scripts": {
-    "compile": "tsc -p .",
-    "start": "NODE_ENV=production node --env-file=.env build/main.js",
-    "dev": "./env-read.sh"
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "typegen": "wrangler types",
+    "check": "tsc --noEmit",
+    "test": "npm run compile && node --test tests/generation.test.mjs",
+    "compile": "npm run check && wrangler deploy --dry-run --outdir dist",
+    "deploy": "wrangler deploy",
+    "register-commands": "node --env-file=.env scripts/register-commands.ts"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/chikinaN/generate-robot.git"
   },
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/chikinaN/generate-robot/issues"
+  "engines": {
+    "node": ">=22.18.0"
   },
+  "license": "ISC",
   "homepage": "https://github.com/chikinaN/generate-robot#readme",
   "dependencies": {
-    "@types/node": "^20.12.12",
-    "canvas": "^2.11.2",
-    "discord.js": "^14.15.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "@resvg/resvg-wasm": "^2.6.2",
+    "discord-api-types": "^0.38.57",
+    "opentype.js": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/opentype.js": "^1.3.10",
+    "miniflare": "^5.20261019.2-beta",
+    "sharp": "^0.35.5",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.152.0"
   }
 }

@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "generate-robot",
+  "account_id": "a133d708159f6fee9d2174aa319a8e8e",
+  "workers_dev": true,
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-23",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "secrets": {
+    "required": [
+      "DISCORD_PUBLIC_KEY"
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

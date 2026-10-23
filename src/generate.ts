@@ -1,83 +1,39 @@
-import { AttachmentBuilder, Client, ChatInputCommandInteraction, Events, InteractionResponse, REST, Routes, SlashCommandBuilder, SlashCommandOptionsOnlyBuilder } from "discord.js";
-import { loadImage, registerFont } from "canvas";
-import { GenerateRobotText } from "./lib/generate/image";
-import * as send from "./lib/send";
-import { styleText } from "util";
+import {
+  ApplicationCommandOptionType,
+  type APIChatInputApplicationCommandInteractionData,
+  type APIApplicationCommandInteraction,
+} from "discord-api-types/v10";
+import { generateRobot, type RobotInput } from "./lib/generate/image";
+import { editReply } from "./lib/send";
 
-type commandHandlerType = (interaction: ChatInputCommandInteraction) => Promise<InteractionResponse | void>;
-
-type commandType = {
-  name: string;
-  builder: SlashCommandOptionsOnlyBuilder;
-  handler: commandHandlerType;
+export function readRobotInput(data: APIChatInputApplicationCommandInteractionData): RobotInput | string {
+  const option = data.options?.find((option) => option.name === "content");
+  const content = option?.type === ApplicationCommandOptionType.String ? option.value : undefined;
+  if (!content?.trim()) return "内容を入力してください。";
+  if (content.length > 1000 || content.split(/\\n|\r?\n/).length > 40) {
+    return "内容は1000文字・40行以内にしてください。";
+  }
+  return { content };
 }
 
-registerFont('./public/font/GenJyuuGothic-Normal.ttf', { family: 'GenJyuuGothic-Normal' });
-
-const commands: commandType[] = [
-  {
-    name: "generate_robot",
-    builder: new SlashCommandBuilder()
-      .setName('generate_robot')
-      .setDescription('鬼畜ロボットの画像です.')
-      .addStringOption(option => option
-        .setName('content')
-        .setDescription('吹き出しのテキスト')
-        .setRequired(true)
-      ),
-    handler: async (interaction) => {
-      const content = interaction.options.getString("content")
-      const robotImage = await loadImage(process.env.ROBOT_IMAGE_PATH ?? "");
-      getLog(content);
-      if (!content) return await send.SendReply(interaction, send.GenerateText(`内容を入力してください。`))
-      const textAttachment = new AttachmentBuilder(GenerateRobotText({ content, robotImage }), { name: 'hapyou-robot.png' });
-      return await send.SendReply(interaction, send.GenerateFile(textAttachment));
+export async function completeGeneration(
+  interaction: APIApplicationCommandInteraction,
+  input: RobotInput,
+  env: Env,
+): Promise<void> {
+  try {
+    const png = await generateRobot(input, env.ASSETS);
+    if (png.byteLength > interaction.attachment_size_limit) {
+      throw new Error("生成した画像がDiscordの添付サイズ上限を超えました。");
+    }
+    await editReply(interaction.application_id, interaction.token, { png });
+    console.log({ event: "robot.generated", interactionId: interaction.id });
+  } catch (error) {
+    console.error({ event: "robot.failed", interactionId: interaction.id, message: error instanceof Error ? error.message : "Unknown error" });
+    try {
+      await editReply(interaction.application_id, interaction.token, { error: "画像の生成・送信に失敗しました。もう一度お試しください。" });
+    } catch {
+      console.error({ event: "robot.error_reply_failed", interactionId: interaction.id });
     }
   }
-]
-function robotHandlers(commands: commandType[]): { [key: string]: commandHandlerType } {
-  return commands.reduce((handlers, command) => {
-    handlers[command.name] = command.handler;
-    return handlers;
-  }, {} as { [key: string]: commandHandlerType });
 }
-
-async function registerCommands(client: Client, rest: REST) {
-  try {
-    await rest.put(
-      Routes.applicationCommands(client.user?.id ?? ""),
-      { body: commands.map(command => command.builder.toJSON()) }
-    );
-  } catch (err) {
-    console.error('Failed to register commands:', err);
-  }
-}
-
-function GenerateRobot(client: Client) {
-  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_BOT_TOKEN ?? "");
-  const commandHandlers = robotHandlers(commands);
-
-  if (process.env.DISCORD_BOT_TOKEN) {
-    registerCommands(client, rest).then(() => {
-      console.log('Successfully registered application commands.');
-      client.on(Events.InteractionCreate, async (interaction) => {
-        if (interaction.isChatInputCommand()) {
-          if (interaction.commandName in commandHandlers) {
-            return commandHandlers[interaction.commandName](interaction);
-          } else {
-            return await send.SendReply(interaction, send.GenerateText(`コマンドが見つかりません。`))
-          }
-        }
-      });
-    });
-  }
-}
-
-function getLog(content: string | null) {
-	console.log(styleText('bgWhiteBright', styleText('black','----- Get Log -----')));
-	console.log(styleText('yellow', `日付: ${new Date().toLocaleString()}`));
-  console.log(styleText('white', `データ: ${content}\n`));
-}
-
-
-export default GenerateRobot;
